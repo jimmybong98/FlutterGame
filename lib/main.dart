@@ -550,10 +550,12 @@ class _Viewport {
     final tilesHigh = (screenSize.height / tileSize).ceil() + 2;
     final halfWide = (tilesWide / 2).floor();
     final halfHigh = (tilesHigh / 2).floor();
-    final startX = (player.x - halfWide).clamp(0, max(0, mapWidth - tilesWide));
-    final startY = (player.y - halfHigh).clamp(0, max(0, mapHeight - tilesHigh));
-    final endX = min(mapWidth, startX + tilesWide);
-    final endY = min(mapHeight, startY + tilesHigh);
+    final startX =
+        (player.x - halfWide).clamp(0, max(0, mapWidth - tilesWide)).toInt();
+    final startY =
+        (player.y - halfHigh).clamp(0, max(0, mapHeight - tilesHigh)).toInt();
+    final endX = min(mapWidth, startX + tilesWide).toInt();
+    final endY = min(mapHeight, startY + tilesHigh).toInt();
     final offset = Offset(-startX * tileSize, -startY * tileSize);
     return _Viewport(
       startX: startX,
