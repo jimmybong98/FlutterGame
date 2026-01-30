@@ -417,7 +417,7 @@ class GamePainter extends CustomPainter {
     }
 
     final renderables = <_Renderable>[
-      ...state.decorations.map((decor) => _Renderable.decor(decor)),
+      ...state.decorations.map((decor) => _Renderable.decoration(decor)),
       ...state.crates.map((crate) => _Renderable.crate(crate)),
       ...state.enemies.map((enemy) => _Renderable.enemy(enemy)),
       _Renderable.player(state.player),
