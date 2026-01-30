@@ -252,39 +252,153 @@ class GamePainter extends CustomPainter {
     paint.color = const Color(0xFF3E3A2D);
     canvas.drawRect(Offset.zero & size, paint);
 
-    final grassPaint = Paint()..color = const Color(0xFF475034);
-    final roadPaint = Paint()..color = const Color(0xFF5B4E3A);
     for (var y = 0; y < state.mapHeight; y++) {
       for (var x = 0; x < state.mapWidth; x++) {
         final tileOffset = Offset(x * tileSize, y * tileSize);
-        final isRoad = state.roadTiles.contains(Point(x, y));
-        canvas.drawRect(
-          tileOffset & Size(tileSize, tileSize),
-          isRoad ? roadPaint : grassPaint,
-        );
+        final rect = tileOffset & Size(tileSize, tileSize);
+        _paintTerrain(canvas, rect, state.terrain[y][x]);
       }
+    }
+
+    for (final tree in state.decorations.where((decor) => decor.type == DecorationType.tree)) {
+      _paintTree(canvas, _tileRect(tree.position, tileSize), tileSize);
+    }
+
+    for (final rock in state.decorations.where((decor) => decor.type == DecorationType.rock)) {
+      _paintRock(canvas, _tileRect(rock.position, tileSize));
+    }
+
+    for (final camp in state.decorations.where((decor) => decor.type == DecorationType.camp)) {
+      _paintCamp(canvas, _tileRect(camp.position, tileSize));
     }
 
     for (final crate in state.crates) {
-      paint.color = crate.isOpened ? Colors.grey : const Color(0xFF9B6A3C);
-      canvas.drawRect(_tileRect(crate.position, tileSize), paint);
+      _paintCrate(canvas, _tileRect(crate.position, tileSize), crate.isOpened);
     }
 
     for (final enemy in state.enemies) {
-      paint.color = enemy.type == EnemyType.zombie ? Colors.greenAccent : Colors.redAccent;
-      canvas.drawCircle(_tileCenter(enemy.position, tileSize), tileSize * 0.35, paint);
-      if (enemy.isBoss) {
-        paint.color = Colors.amber;
-        canvas.drawCircle(_tileCenter(enemy.position, tileSize), tileSize * 0.15, paint);
-      }
+      _paintEnemy(canvas, _tileCenter(enemy.position, tileSize), tileSize, enemy);
     }
 
-    paint.color = Colors.blueAccent;
-    canvas.drawCircle(
-      _tileCenter(state.player.position, tileSize),
-      tileSize * 0.4,
-      paint,
+    _paintPlayer(canvas, _tileCenter(state.player.position, tileSize), tileSize);
+  }
+
+  void _paintTerrain(Canvas canvas, Rect rect, TerrainType type) {
+    final paint = Paint()..style = PaintingStyle.fill;
+    switch (type) {
+      case TerrainType.grass:
+        paint.color = const Color(0xFF4C5A3E);
+        canvas.drawRect(rect, paint);
+        paint.color = const Color(0xFF556A47);
+        canvas.drawCircle(rect.center + const Offset(4, -6), rect.width * 0.12, paint);
+        canvas.drawCircle(rect.center + const Offset(-6, 8), rect.width * 0.08, paint);
+        break;
+      case TerrainType.road:
+        paint.color = const Color(0xFF5E4A35);
+        canvas.drawRect(rect, paint);
+        paint.color = const Color(0xFF6B563F);
+        canvas.drawRect(rect.deflate(rect.width * 0.2), paint);
+        break;
+      case TerrainType.water:
+        paint.color = const Color(0xFF284C70);
+        canvas.drawRect(rect, paint);
+        paint.color = const Color(0xFF3B6E9E);
+        canvas.drawArc(rect.deflate(rect.width * 0.15), 0, 2.4, false, paint);
+        break;
+      case TerrainType.forest:
+        paint.color = const Color(0xFF2E4C36);
+        canvas.drawRect(rect, paint);
+        paint.color = const Color(0xFF375A3F);
+        canvas.drawCircle(rect.center, rect.width * 0.15, paint);
+        break;
+      case TerrainType.sand:
+        paint.color = const Color(0xFF7B6A45);
+        canvas.drawRect(rect, paint);
+        paint.color = const Color(0xFF8C7A52);
+        canvas.drawCircle(rect.center + const Offset(6, 6), rect.width * 0.1, paint);
+        break;
+    }
+  }
+
+  void _paintTree(Canvas canvas, Rect rect, double tileSize) {
+    final trunkPaint = Paint()..color = const Color(0xFF5A3C2A);
+    final leavesPaint = Paint()..color = const Color(0xFF2F6B3F);
+    final trunk = Rect.fromCenter(
+      center: rect.center + Offset(0, tileSize * 0.15),
+      width: rect.width * 0.2,
+      height: rect.height * 0.35,
     );
+    canvas.drawRect(trunk, trunkPaint);
+    canvas.drawCircle(rect.center + Offset(0, -tileSize * 0.1), rect.width * 0.35, leavesPaint);
+    canvas.drawCircle(rect.center + Offset(-tileSize * 0.15, 0), rect.width * 0.25, leavesPaint);
+  }
+
+  void _paintRock(Canvas canvas, Rect rect) {
+    final paint = Paint()..color = const Color(0xFF7D7E80);
+    final rockRect = Rect.fromCenter(center: rect.center, width: rect.width * 0.55, height: rect.height * 0.4);
+    canvas.drawRRect(RRect.fromRectAndRadius(rockRect, const Radius.circular(6)), paint);
+  }
+
+  void _paintCamp(Canvas canvas, Rect rect) {
+    final firePaint = Paint()..color = const Color(0xFFE58A2E);
+    final logPaint = Paint()..color = const Color(0xFF6A4630);
+    canvas.drawOval(rect.deflate(rect.width * 0.25), firePaint);
+    canvas.drawRect(
+      Rect.fromCenter(center: rect.center, width: rect.width * 0.6, height: rect.height * 0.1),
+      logPaint,
+    );
+  }
+
+  void _paintCrate(Canvas canvas, Rect rect, bool opened) {
+    final cratePaint = Paint()..color = opened ? const Color(0xFF6B5B4D) : const Color(0xFF9B6A3C);
+    final outlinePaint = Paint()
+      ..color = const Color(0xFF2E2015)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+    canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(4)), cratePaint);
+    canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(4)), outlinePaint);
+    if (!opened) {
+      final latch = Rect.fromCenter(center: rect.center, width: rect.width * 0.2, height: rect.height * 0.1);
+      canvas.drawRect(latch, Paint()..color = const Color(0xFFD1B06A));
+    }
+  }
+
+  void _paintEnemy(Canvas canvas, Offset center, double tileSize, Enemy enemy) {
+    final basePaint = Paint()
+      ..color = enemy.type == EnemyType.zombie ? const Color(0xFF5FD37C) : const Color(0xFFD7685A);
+    final outlinePaint = Paint()
+      ..color = const Color(0xFF1B1B1B)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+    final body = Rect.fromCenter(center: center, width: tileSize * 0.55, height: tileSize * 0.6);
+    canvas.drawRRect(RRect.fromRectAndRadius(body, const Radius.circular(6)), basePaint);
+    canvas.drawRRect(RRect.fromRectAndRadius(body, const Radius.circular(6)), outlinePaint);
+    canvas.drawCircle(center + Offset(0, -tileSize * 0.25), tileSize * 0.15, basePaint);
+    if (enemy.isBoss) {
+      canvas.drawCircle(center + Offset(0, -tileSize * 0.42), tileSize * 0.08, Paint()..color = Colors.amber);
+    }
+  }
+
+  void _paintPlayer(Canvas canvas, Offset center, double tileSize) {
+    final armorPaint = Paint()..color = const Color(0xFF3A6EA5);
+    final shieldPaint = Paint()..color = const Color(0xFFB08B4C);
+    final outlinePaint = Paint()
+      ..color = Colors.black
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+
+    final body = Rect.fromCenter(center: center, width: tileSize * 0.6, height: tileSize * 0.65);
+    canvas.drawRRect(RRect.fromRectAndRadius(body, const Radius.circular(6)), armorPaint);
+    canvas.drawRRect(RRect.fromRectAndRadius(body, const Radius.circular(6)), outlinePaint);
+    canvas.drawCircle(center + Offset(0, -tileSize * 0.3), tileSize * 0.18, armorPaint);
+    final shield = Path()
+      ..moveTo(center.dx + tileSize * 0.25, center.dy - tileSize * 0.1)
+      ..lineTo(center.dx + tileSize * 0.4, center.dy + tileSize * 0.05)
+      ..lineTo(center.dx + tileSize * 0.3, center.dy + tileSize * 0.28)
+      ..lineTo(center.dx + tileSize * 0.18, center.dy + tileSize * 0.05)
+      ..close();
+    canvas.drawPath(shield, shieldPaint);
+    canvas.drawPath(shield, outlinePaint);
   }
 
   Rect _tileRect(Point<int> position, double tileSize) {
@@ -307,6 +421,10 @@ class GamePainter extends CustomPainter {
   bool shouldRepaint(covariant GamePainter oldDelegate) => true;
 }
 
+enum TerrainType { grass, road, water, forest, sand }
+
+enum DecorationType { tree, rock, camp }
+
 class GameState {
   GameState({required int seed})
       : random = Random(seed),
@@ -320,20 +438,39 @@ class GameState {
   final int mapHeight = 24;
   final List<Crate> crates = [];
   final List<Enemy> enemies = [];
+  final List<Decoration> decorations = [];
   final List<String> inventory = [];
+  final List<List<TerrainType>> terrain = [];
   final Set<Point<int>> roadTiles = {};
-  String logMessage = 'Explore the open world and survive.';
+  String logMessage = 'Explore the medieval frontier and survive.';
 
   void _generateWorld() {
+    _generateTerrain();
+
     for (var x = 4; x < mapWidth - 4; x++) {
       roadTiles.add(Point(x, mapHeight ~/ 2));
     }
     for (var y = 2; y < mapHeight - 2; y++) {
       roadTiles.add(Point(mapWidth ~/ 2, y));
     }
+    for (final road in roadTiles) {
+      terrain[road.y][road.x] = TerrainType.road;
+    }
 
     for (var i = 0; i < 30; i++) {
       crates.add(Crate(position: _randomOpenTile()));
+    }
+
+    for (var i = 0; i < 18; i++) {
+      decorations.add(Decoration(position: _randomOpenTile(), type: DecorationType.tree));
+    }
+
+    for (var i = 0; i < 10; i++) {
+      decorations.add(Decoration(position: _randomOpenTile(), type: DecorationType.rock));
+    }
+
+    for (var i = 0; i < 4; i++) {
+      decorations.add(Decoration(position: _randomOpenTile(), type: DecorationType.camp));
     }
 
     for (var i = 0; i < 8; i++) {
@@ -353,12 +490,39 @@ class GameState {
     }
   }
 
+  void _generateTerrain() {
+    terrain.clear();
+    for (var y = 0; y < mapHeight; y++) {
+      final row = <TerrainType>[];
+      for (var x = 0; x < mapWidth; x++) {
+        final roll = random.nextDouble();
+        if (roll < 0.08) {
+          row.add(TerrainType.water);
+        } else if (roll < 0.16) {
+          row.add(TerrainType.forest);
+        } else if (roll < 0.22) {
+          row.add(TerrainType.sand);
+        } else {
+          row.add(TerrainType.grass);
+        }
+      }
+      terrain.add(row);
+    }
+  }
+
   Point<int> _randomOpenTile() {
     Point<int> position;
     do {
       position = Point(random.nextInt(mapWidth), random.nextInt(mapHeight));
-    } while (position == player.position || crates.any((crate) => crate.position == position));
+    } while (_isOccupied(position));
     return position;
+  }
+
+  bool _isOccupied(Point<int> position) {
+    return position == player.position ||
+        crates.any((crate) => crate.position == position) ||
+        enemies.any((enemy) => enemy.position == position) ||
+        decorations.any((decor) => decor.position == position);
   }
 
   void movePlayer(Offset delta) {
@@ -487,6 +651,13 @@ class Crate {
   final int id;
   final Point<int> position;
   bool isOpened = false;
+}
+
+class Decoration {
+  Decoration({required this.position, required this.type});
+
+  final Point<int> position;
+  final DecorationType type;
 }
 
 enum EnemyType { human, zombie }
