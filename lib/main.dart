@@ -52,6 +52,12 @@ class _GameScreenState extends State<GameScreen> {
     });
   }
 
+  void _useItem(String item) {
+    setState(() {
+      _gameState.useItem(item);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -79,6 +85,7 @@ class _GameScreenState extends State<GameScreen> {
             onAttack: _attack,
             onLoot: _lootNearestCrate,
             onUpgrade: _upgrade,
+            onUseItem: _useItem,
           ),
         ],
       ),
@@ -93,6 +100,7 @@ class _ControlPanel extends StatelessWidget {
     required this.onAttack,
     required this.onLoot,
     required this.onUpgrade,
+    required this.onUseItem,
   });
 
   final GameState state;
@@ -100,67 +108,221 @@ class _ControlPanel extends StatelessWidget {
   final VoidCallback onAttack;
   final VoidCallback onLoot;
   final void Function(String stat) onUpgrade;
+  final void Function(String item) onUseItem;
+
+  @override
+  Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: 3,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        color: const Color(0xFF1B1B1B),
+        child: Column(
+          children: [
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              alignment: WrapAlignment.center,
+              children: [
+                _StatChip(label: 'HP', value: state.player.health),
+                _StatChip(label: 'Armor', value: state.player.armor),
+                _StatChip(label: 'Damage', value: state.player.damage),
+                _StatChip(label: 'Level', value: state.player.level),
+                _StatChip(label: 'Loot', value: state.inventory.length),
+                _StatChip(label: 'Supplies', value: state.supplies),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              state.logMessage,
+              style: const TextStyle(color: Colors.white70),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            const TabBar(
+              labelColor: Colors.white,
+              unselectedLabelColor: Colors.white54,
+              indicatorColor: Colors.amber,
+              tabs: [
+                Tab(text: 'Actions', icon: Icon(Icons.sports_martial_arts)),
+                Tab(text: 'Inventory', icon: Icon(Icons.backpack)),
+                Tab(text: 'Upgrades', icon: Icon(Icons.trending_up)),
+              ],
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 180,
+              child: TabBarView(
+                children: [
+                  _ActionsTab(onMove: onMove, onAttack: onAttack, onLoot: onLoot),
+                  _InventoryTab(state: state, onUseItem: onUseItem),
+                  _UpgradesTab(state: state, onUpgrade: onUpgrade),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ActionsTab extends StatelessWidget {
+  const _ActionsTab({
+    required this.onMove,
+    required this.onAttack,
+    required this.onLoot,
+  });
+
+  final void Function(Offset delta) onMove;
+  final VoidCallback onAttack;
+  final VoidCallback onLoot;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceAround,
+      children: [
+        _MovementControls(onMove: onMove),
+        Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            ElevatedButton.icon(
+              onPressed: onAttack,
+              icon: const Icon(Icons.flash_on),
+              label: const Text('Attack'),
+            ),
+            const SizedBox(height: 8),
+            ElevatedButton.icon(
+              onPressed: onLoot,
+              icon: const Icon(Icons.inventory_2),
+              label: const Text('Loot Crate'),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _InventoryTab extends StatelessWidget {
+  const _InventoryTab({required this.state, required this.onUseItem});
+
+  final GameState state;
+  final void Function(String item) onUseItem;
+
+  @override
+  Widget build(BuildContext context) {
+    if (state.inventory.isEmpty) {
+      return const Center(
+        child: Text(
+          'Inventory empty. Loot crates to collect gear.',
+          style: TextStyle(color: Colors.white70),
+          textAlign: TextAlign.center,
+        ),
+      );
+    }
+    return ListView.separated(
+      itemCount: state.inventory.length,
+      separatorBuilder: (_, __) => const Divider(color: Colors.white12),
+      itemBuilder: (context, index) {
+        final item = state.inventory[index];
+        final actionLabel = state.actionLabelForItem(item);
+        final isActionable = actionLabel != null;
+        return ListTile(
+          dense: true,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+          title: Text(item, style: const TextStyle(color: Colors.white)),
+          subtitle: Text(
+            state.itemDescription(item),
+            style: const TextStyle(color: Colors.white54, fontSize: 12),
+          ),
+          trailing: isActionable
+              ? OutlinedButton(
+                  onPressed: () => onUseItem(item),
+                  style: OutlinedButton.styleFrom(foregroundColor: Colors.white),
+                  child: Text(actionLabel!),
+                )
+              : const Text('Equipped', style: TextStyle(color: Colors.white54)),
+        );
+      },
+    );
+  }
+}
+
+class _UpgradesTab extends StatelessWidget {
+  const _UpgradesTab({required this.state, required this.onUpgrade});
+
+  final GameState state;
+  final void Function(String stat) onUpgrade;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        _UpgradeCard(
+          label: 'HP Boost',
+          description: '+5 max HP for 3 supplies + 1 level',
+          enabled: state.canUpgrade('hp'),
+          onPressed: () => onUpgrade('hp'),
+        ),
+        const SizedBox(height: 8),
+        _UpgradeCard(
+          label: 'Armor Plating',
+          description: '+1 armor for 2 supplies + 1 level',
+          enabled: state.canUpgrade('armor'),
+          onPressed: () => onUpgrade('armor'),
+        ),
+        const SizedBox(height: 8),
+        _UpgradeCard(
+          label: 'Weapon Edge',
+          description: '+1 damage for 2 supplies + 1 level',
+          enabled: state.canUpgrade('damage'),
+          onPressed: () => onUpgrade('damage'),
+        ),
+      ],
+    );
+  }
+}
+
+class _UpgradeCard extends StatelessWidget {
+  const _UpgradeCard({
+    required this.label,
+    required this.description,
+    required this.enabled,
+    required this.onPressed,
+  });
+
+  final String label;
+  final String description;
+  final bool enabled;
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(12),
-      color: const Color(0xFF1B1B1B),
-      child: Column(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFF231E18),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white12),
+      ),
+      child: Row(
         children: [
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            alignment: WrapAlignment.center,
-            children: [
-              _StatChip(label: 'HP', value: state.player.health),
-              _StatChip(label: 'Armor', value: state.player.armor),
-              _StatChip(label: 'Damage', value: state.player.damage),
-              _StatChip(label: 'Level', value: state.player.level),
-              _StatChip(label: 'Loot', value: state.inventory.length),
-            ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 4),
+                Text(description, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+              ],
+            ),
           ),
-          const SizedBox(height: 8),
-          Text(
-            state.logMessage,
-            style: const TextStyle(color: Colors.white70),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _MovementControls(onMove: onMove),
-              Column(
-                children: [
-                  ElevatedButton.icon(
-                    onPressed: onAttack,
-                    icon: const Icon(Icons.flash_on),
-                    label: const Text('Attack'),
-                  ),
-                  const SizedBox(height: 8),
-                  ElevatedButton.icon(
-                    onPressed: onLoot,
-                    icon: const Icon(Icons.inventory_2),
-                    label: const Text('Loot Crate'),
-                  ),
-                ],
-              ),
-              Column(
-                children: [
-                  const Text('Upgrades', style: TextStyle(color: Colors.white)),
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 6,
-                    children: [
-                      _UpgradeButton(label: 'HP', onPressed: () => onUpgrade('hp')),
-                      _UpgradeButton(label: 'Armor', onPressed: () => onUpgrade('armor')),
-                      _UpgradeButton(label: 'Damage', onPressed: () => onUpgrade('damage')),
-                    ],
-                  ),
-                ],
-              ),
-            ],
+          ElevatedButton(
+            onPressed: enabled ? onPressed : null,
+            child: const Text('Upgrade'),
           ),
         ],
       ),
@@ -202,25 +364,6 @@ class _MovementControls extends StatelessWidget {
   }
 }
 
-class _UpgradeButton extends StatelessWidget {
-  const _UpgradeButton({required this.label, required this.onPressed});
-
-  final String label;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return OutlinedButton(
-      onPressed: onPressed,
-      style: OutlinedButton.styleFrom(
-        foregroundColor: Colors.white,
-        side: const BorderSide(color: Colors.white24),
-      ),
-      child: Text(label),
-    );
-  }
-}
-
 class _StatChip extends StatelessWidget {
   const _StatChip({required this.label, required this.value});
 
@@ -246,206 +389,216 @@ class GamePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    const tileSize = 24.0;
-    final viewport = _Viewport.fromPlayer(
-      player: state.player.position,
-      mapWidth: state.mapWidth,
-      mapHeight: state.mapHeight,
-      tileSize: tileSize,
+    const tileWidth = 36.0;
+    const tileHeight = 18.0;
+    final projection = _IsoProjection(
+      tileWidth: tileWidth,
+      tileHeight: tileHeight,
       screenSize: size,
+      focus: state.player.position,
     );
     final paint = Paint()..style = PaintingStyle.fill;
 
-    paint.color = const Color(0xFF2E241C);
+    paint.color = const Color(0xFF1C1A18);
     canvas.drawRect(Offset.zero & size, paint);
 
-    for (var y = viewport.startY; y < viewport.endY; y++) {
-      for (var x = viewport.startX; x < viewport.endX; x++) {
-        final rect = Rect.fromLTWH(
-          (x * tileSize) + viewport.offset.dx,
-          (y * tileSize) + viewport.offset.dy,
-          tileSize,
-          tileSize,
-        );
-        _paintTerrain(canvas, rect, state.terrain[y][x]);
+    final maxSum = state.mapWidth + state.mapHeight;
+    for (var sum = 0; sum < maxSum; sum++) {
+      for (var x = 0; x < state.mapWidth; x++) {
+        final y = sum - x;
+        if (y < 0 || y >= state.mapHeight) {
+          continue;
+        }
+        final position = Point<int>(x, y);
+        final screenCenter = projection.tileToScreen(position);
+        final terrainType = state.terrain[y][x];
+        _paintIsoTile(canvas, screenCenter, terrainType, projection);
       }
     }
 
-    for (final decoration in state.decorations) {
-      if (!viewport.contains(decoration.position)) {
-        continue;
-      }
-      final rect = _tileRect(decoration.position, tileSize, viewport.offset);
-      switch (decoration.type) {
-        case DecorationType.tree:
-          _paintTree(canvas, rect, tileSize);
+    final renderables = <_Renderable>[
+      ...state.decorations.map((decor) => _Renderable.decor(decor)),
+      ...state.crates.map((crate) => _Renderable.crate(crate)),
+      ...state.enemies.map((enemy) => _Renderable.enemy(enemy)),
+      _Renderable.player(state.player),
+    ]..sort((a, b) => a.depth.compareTo(b.depth));
+
+    for (final renderable in renderables) {
+      final screenCenter = projection.tileToScreen(renderable.position);
+      switch (renderable.type) {
+        case _RenderableType.decoration:
+          _paintDecoration(canvas, screenCenter, tileWidth, renderable.decoration!);
           break;
-        case DecorationType.rock:
-          _paintRock(canvas, rect, tileSize);
+        case _RenderableType.crate:
+          _paintCrateIso(canvas, screenCenter, tileWidth, renderable.crate!);
           break;
-        case DecorationType.camp:
-          _paintCamp(canvas, rect, tileSize);
+        case _RenderableType.enemy:
+          _paintEnemyIso(canvas, screenCenter, tileWidth, renderable.enemy!);
+          break;
+        case _RenderableType.player:
+          _paintPlayerIso(canvas, screenCenter, tileWidth);
           break;
       }
     }
-
-    for (final crate in state.crates) {
-      if (!viewport.contains(crate.position)) {
-        continue;
-      }
-      _paintCrate(canvas, _tileRect(crate.position, tileSize, viewport.offset), crate.isOpened);
-    }
-
-    for (final enemy in state.enemies) {
-      if (!viewport.contains(enemy.position)) {
-        continue;
-      }
-      _paintEnemy(canvas, _tileCenter(enemy.position, tileSize, viewport.offset), tileSize, enemy);
-    }
-
-    _paintPlayer(
-      canvas,
-      _tileCenter(state.player.position, tileSize, viewport.offset),
-      tileSize,
-    );
   }
 
-  void _paintTerrain(Canvas canvas, Rect rect, TerrainType type) {
-    final paint = Paint()..style = PaintingStyle.fill;
-    switch (type) {
-      case TerrainType.grass:
-        paint.shader = const LinearGradient(
-          colors: [Color(0xFF3E5630), Color(0xFF566B45)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ).createShader(rect);
-        canvas.drawRect(rect, paint);
-        paint.shader = null;
-        paint.color = const Color(0xFF4A6B3D);
-        canvas.drawCircle(rect.center + const Offset(4, -6), rect.width * 0.15, paint);
+  void _paintIsoTile(
+    Canvas canvas,
+    Offset center,
+    TerrainType type,
+    _IsoProjection projection,
+  ) {
+    final palette = _TerrainPalette.forType(type);
+    final elevation = palette.elevation;
+    final halfW = projection.tileWidth / 2;
+    final halfH = projection.tileHeight / 2;
+    final top = Offset(center.dx, center.dy - halfH - elevation);
+    final right = Offset(center.dx + halfW, center.dy - elevation);
+    final bottom = Offset(center.dx, center.dy + halfH - elevation);
+    final left = Offset(center.dx - halfW, center.dy - elevation);
+    final baseRight = right + Offset(0, elevation);
+    final baseBottom = bottom + Offset(0, elevation);
+    final baseLeft = left + Offset(0, elevation);
+
+    final topFace = Path()
+      ..moveTo(top.dx, top.dy)
+      ..lineTo(right.dx, right.dy)
+      ..lineTo(bottom.dx, bottom.dy)
+      ..lineTo(left.dx, left.dy)
+      ..close();
+
+    canvas.drawPath(topFace, Paint()..color = palette.top);
+
+    if (elevation > 0) {
+      final leftFace = Path()
+        ..moveTo(left.dx, left.dy)
+        ..lineTo(bottom.dx, bottom.dy)
+        ..lineTo(baseBottom.dx, baseBottom.dy)
+        ..lineTo(baseLeft.dx, baseLeft.dy)
+        ..close();
+      final rightFace = Path()
+        ..moveTo(right.dx, right.dy)
+        ..lineTo(bottom.dx, bottom.dy)
+        ..lineTo(baseBottom.dx, baseBottom.dy)
+        ..lineTo(baseRight.dx, baseRight.dy)
+        ..close();
+      canvas.drawPath(leftFace, Paint()..color = palette.left);
+      canvas.drawPath(rightFace, Paint()..color = palette.right);
+    }
+
+    final outlinePaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..color = Colors.black.withOpacity(0.12);
+    canvas.drawPath(topFace, outlinePaint);
+  }
+
+  void _paintDecoration(
+    Canvas canvas,
+    Offset center,
+    double tileWidth,
+    Decoration decoration,
+  ) {
+    switch (decoration.type) {
+      case DecorationType.tree:
+        _paintTreeIso(canvas, center, tileWidth);
         break;
-      case TerrainType.road:
-        paint.shader = const LinearGradient(
-          colors: [Color(0xFF4F3C2B), Color(0xFF6B523B)],
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-        ).createShader(rect);
-        canvas.drawRect(rect, paint);
-        paint.shader = null;
-        paint.color = const Color(0xFF3B2C1F);
-        canvas.drawRect(rect.deflate(rect.width * 0.2), paint);
+      case DecorationType.rock:
+        _paintRockIso(canvas, center, tileWidth);
         break;
-      case TerrainType.water:
-        paint.shader = const LinearGradient(
-          colors: [Color(0xFF1A3C5C), Color(0xFF356FA5)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ).createShader(rect);
-        canvas.drawRect(rect, paint);
-        paint.shader = null;
-        paint.color = const Color(0xFF5EA4D8);
-        canvas.drawArc(rect.deflate(rect.width * 0.1), 0.2, 2.1, false, paint);
-        break;
-      case TerrainType.forest:
-        paint.shader = const LinearGradient(
-          colors: [Color(0xFF1F3D2D), Color(0xFF325C44)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ).createShader(rect);
-        canvas.drawRect(rect, paint);
-        paint.shader = null;
-        paint.color = const Color(0xFF2E6A44);
-        canvas.drawCircle(rect.center, rect.width * 0.18, paint);
-        break;
-      case TerrainType.sand:
-        paint.shader = const LinearGradient(
-          colors: [Color(0xFF8B7349), Color(0xFFB0955E)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ).createShader(rect);
-        canvas.drawRect(rect, paint);
-        paint.shader = null;
-        paint.color = const Color(0xFFC4A76A);
-        canvas.drawCircle(rect.center + const Offset(6, 6), rect.width * 0.12, paint);
+      case DecorationType.camp:
+        _paintCampIso(canvas, center, tileWidth);
         break;
     }
   }
 
-  void _paintTree(Canvas canvas, Rect rect, double tileSize) {
+  void _paintTreeIso(Canvas canvas, Offset center, double tileWidth) {
+    final trunkHeight = tileWidth * 0.35;
+    final canopyHeight = tileWidth * 0.6;
     final trunkPaint = Paint()..color = const Color(0xFF5A3C2A);
-    final leavesPaint = Paint()
+    final canopyPaint = Paint()
       ..shader = const LinearGradient(
         colors: [Color(0xFF1F6B3A), Color(0xFF3FA35C)],
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
-      ).createShader(rect);
+      ).createShader(
+        Rect.fromCenter(
+          center: center.translate(0, -trunkHeight),
+          width: tileWidth,
+          height: canopyHeight,
+        ),
+      );
     final shadowPaint = Paint()..color = Colors.black.withOpacity(0.25);
-    canvas.drawOval(rect.shift(Offset(3, tileSize * 0.2)).deflate(tileSize * 0.2), shadowPaint);
-    final trunk = Rect.fromCenter(
-      center: rect.center + Offset(0, tileSize * 0.2),
-      width: rect.width * 0.2,
-      height: rect.height * 0.35,
+    canvas.drawOval(
+      Rect.fromCenter(center: center.translate(0, tileWidth * 0.2), width: tileWidth * 0.9, height: tileWidth * 0.35),
+      shadowPaint,
     );
-    canvas.drawRect(trunk, trunkPaint);
-    canvas.drawCircle(rect.center + Offset(0, -tileSize * 0.12), rect.width * 0.4, leavesPaint);
+    final trunkRect = Rect.fromCenter(
+      center: center.translate(0, -trunkHeight * 0.1),
+      width: tileWidth * 0.18,
+      height: trunkHeight,
+    );
+    canvas.drawRect(trunkRect, trunkPaint);
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: center.translate(0, -trunkHeight - canopyHeight * 0.2),
+        width: tileWidth * 0.9,
+        height: canopyHeight,
+      ),
+      canopyPaint,
+    );
   }
 
-  void _paintRock(Canvas canvas, Rect rect, double tileSize) {
+  void _paintRockIso(Canvas canvas, Offset center, double tileWidth) {
+    final rockRect = Rect.fromCenter(center: center.translate(0, -tileWidth * 0.1), width: tileWidth * 0.7, height: tileWidth * 0.4);
     final paint = Paint()
       ..shader = const LinearGradient(
         colors: [Color(0xFF596066), Color(0xFF9AA1A8)],
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
-      ).createShader(rect);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(rect.deflate(tileSize * 0.2), const Radius.circular(8)),
-      paint,
-    );
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(rect.deflate(tileSize * 0.2), const Radius.circular(8)),
-      Paint()
-        ..color = Colors.black.withOpacity(0.25)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2,
-    );
+      ).createShader(rockRect);
+    canvas.drawRRect(RRect.fromRectAndRadius(rockRect, const Radius.circular(6)), paint);
   }
 
-  void _paintCamp(Canvas canvas, Rect rect, double tileSize) {
+  void _paintCampIso(Canvas canvas, Offset center, double tileWidth) {
     final firePaint = Paint()
       ..shader = const RadialGradient(
         colors: [Color(0xFFFFF2B0), Color(0xFFE58A2E), Color(0xFFB3471D)],
-      ).createShader(rect);
+      ).createShader(Rect.fromCenter(center: center, width: tileWidth * 0.6, height: tileWidth * 0.6));
     final logPaint = Paint()..color = const Color(0xFF6A4630);
-    canvas.drawOval(rect.deflate(tileSize * 0.25), firePaint);
+    canvas.drawOval(
+      Rect.fromCenter(center: center.translate(0, -tileWidth * 0.05), width: tileWidth * 0.5, height: tileWidth * 0.25),
+      firePaint,
+    );
     canvas.drawRect(
-      Rect.fromCenter(center: rect.center, width: rect.width * 0.7, height: rect.height * 0.12),
+      Rect.fromCenter(center: center.translate(0, tileWidth * 0.12), width: tileWidth * 0.6, height: tileWidth * 0.1),
       logPaint,
     );
   }
 
-  void _paintCrate(Canvas canvas, Rect rect, bool opened) {
+  void _paintCrateIso(Canvas canvas, Offset center, double tileWidth, Crate crate) {
+    final boxRect = Rect.fromCenter(center: center.translate(0, -tileWidth * 0.1), width: tileWidth * 0.45, height: tileWidth * 0.3);
     final cratePaint = Paint()
       ..shader = LinearGradient(
-        colors: opened
+        colors: crate.isOpened
             ? [const Color(0xFF5C4B3E), const Color(0xFF6B5B4D)]
             : [const Color(0xFF8C5C2D), const Color(0xFFB1783E)],
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
-      ).createShader(rect);
-    final outlinePaint = Paint()
-      ..color = const Color(0xFF2E2015)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
-    canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(6)), cratePaint);
-    canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(6)), outlinePaint);
-    if (!opened) {
-      final latch = Rect.fromCenter(center: rect.center, width: rect.width * 0.2, height: rect.height * 0.1);
+      ).createShader(boxRect);
+    canvas.drawRRect(RRect.fromRectAndRadius(boxRect, const Radius.circular(6)), cratePaint);
+    if (!crate.isOpened) {
+      final latch = Rect.fromCenter(center: boxRect.center, width: boxRect.width * 0.2, height: boxRect.height * 0.2);
       canvas.drawRect(latch, Paint()..color = const Color(0xFFE3C177));
     }
   }
 
-  void _paintEnemy(Canvas canvas, Offset center, double tileSize, Enemy enemy) {
-    final bodyRect = Rect.fromCenter(center: center, width: tileSize * 0.6, height: tileSize * 0.65);
+  void _paintEnemyIso(Canvas canvas, Offset center, double tileWidth, Enemy enemy) {
+    final bodyHeight = tileWidth * 0.45;
+    final bodyRect = Rect.fromCenter(
+      center: center.translate(0, -bodyHeight * 0.4),
+      width: tileWidth * 0.35,
+      height: bodyHeight,
+    );
     final basePaint = Paint()
       ..shader = LinearGradient(
         colors: enemy.type == EnemyType.zombie
@@ -454,114 +607,178 @@ class GamePainter extends CustomPainter {
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
       ).createShader(bodyRect);
-    final outlinePaint = Paint()
-      ..color = const Color(0xFF1B1B1B)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
-    canvas.drawShadow(Path()..addOval(bodyRect), Colors.black, 4, true);
-    canvas.drawRRect(RRect.fromRectAndRadius(bodyRect, const Radius.circular(8)), basePaint);
-    canvas.drawRRect(RRect.fromRectAndRadius(bodyRect, const Radius.circular(8)), outlinePaint);
-    canvas.drawCircle(center + Offset(0, -tileSize * 0.28), tileSize * 0.16, basePaint);
+    canvas.drawRRect(RRect.fromRectAndRadius(bodyRect, const Radius.circular(6)), basePaint);
+    canvas.drawCircle(center.translate(0, -bodyHeight * 0.9), tileWidth * 0.12, basePaint);
     if (enemy.isBoss) {
-      canvas.drawCircle(center + Offset(0, -tileSize * 0.45), tileSize * 0.09, Paint()..color = Colors.amber);
+      canvas.drawCircle(center.translate(0, -bodyHeight * 1.3), tileWidth * 0.07, Paint()..color = Colors.amber);
     }
   }
 
-  void _paintPlayer(Canvas canvas, Offset center, double tileSize) {
-    final bodyRect = Rect.fromCenter(center: center, width: tileSize * 0.62, height: tileSize * 0.7);
+  void _paintPlayerIso(Canvas canvas, Offset center, double tileWidth) {
+    final bodyHeight = tileWidth * 0.5;
+    final bodyRect = Rect.fromCenter(
+      center: center.translate(0, -bodyHeight * 0.4),
+      width: tileWidth * 0.38,
+      height: bodyHeight,
+    );
     final armorPaint = Paint()
       ..shader = const LinearGradient(
         colors: [Color(0xFF2C6CA3), Color(0xFF5CB0E6)],
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
       ).createShader(bodyRect);
+    final outlinePaint = Paint()
+      ..color = Colors.black
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+    canvas.drawRRect(RRect.fromRectAndRadius(bodyRect, const Radius.circular(6)), armorPaint);
+    canvas.drawRRect(RRect.fromRectAndRadius(bodyRect, const Radius.circular(6)), outlinePaint);
+    canvas.drawCircle(center.translate(0, -bodyHeight * 0.95), tileWidth * 0.12, armorPaint);
+    final shield = Path()
+      ..moveTo(center.dx + tileWidth * 0.18, center.dy - tileWidth * 0.1)
+      ..lineTo(center.dx + tileWidth * 0.3, center.dy)
+      ..lineTo(center.dx + tileWidth * 0.22, center.dy + tileWidth * 0.18)
+      ..lineTo(center.dx + tileWidth * 0.08, center.dy)
+      ..close();
     final shieldPaint = Paint()
       ..shader = const LinearGradient(
         colors: [Color(0xFF9B7B3E), Color(0xFFD8B56E)],
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
-      ).createShader(bodyRect);
-    final outlinePaint = Paint()
-      ..color = Colors.black
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
-
-    canvas.drawShadow(Path()..addOval(bodyRect), Colors.black, 6, true);
-    canvas.drawRRect(RRect.fromRectAndRadius(bodyRect, const Radius.circular(8)), armorPaint);
-    canvas.drawRRect(RRect.fromRectAndRadius(bodyRect, const Radius.circular(8)), outlinePaint);
-    canvas.drawCircle(center + Offset(0, -tileSize * 0.32), tileSize * 0.18, armorPaint);
-    final shield = Path()
-      ..moveTo(center.dx + tileSize * 0.26, center.dy - tileSize * 0.1)
-      ..lineTo(center.dx + tileSize * 0.42, center.dy + tileSize * 0.05)
-      ..lineTo(center.dx + tileSize * 0.32, center.dy + tileSize * 0.3)
-      ..lineTo(center.dx + tileSize * 0.18, center.dy + tileSize * 0.05)
-      ..close();
+      ).createShader(shield.getBounds());
     canvas.drawPath(shield, shieldPaint);
     canvas.drawPath(shield, outlinePaint);
-  }
-
-  Rect _tileRect(Point<int> position, double tileSize, Offset cameraOffset) {
-    return Rect.fromLTWH(
-      position.x * tileSize + tileSize * 0.1 + cameraOffset.dx,
-      position.y * tileSize + tileSize * 0.1 + cameraOffset.dy,
-      tileSize * 0.8,
-      tileSize * 0.8,
-    );
-  }
-
-  Offset _tileCenter(Point<int> position, double tileSize, Offset cameraOffset) {
-    return Offset(
-      position.x * tileSize + tileSize * 0.5 + cameraOffset.dx,
-      position.y * tileSize + tileSize * 0.5 + cameraOffset.dy,
-    );
   }
 
   @override
   bool shouldRepaint(covariant GamePainter oldDelegate) => true;
 }
 
-class _Viewport {
-  _Viewport({
-    required this.startX,
-    required this.startY,
-    required this.endX,
-    required this.endY,
-    required this.offset,
-  });
+class _IsoProjection {
+  _IsoProjection({
+    required this.tileWidth,
+    required this.tileHeight,
+    required Size screenSize,
+    required Point<int> focus,
+  }) : offset = _calculateOffset(tileWidth, tileHeight, screenSize, focus);
 
-  final int startX;
-  final int startY;
-  final int endX;
-  final int endY;
+  final double tileWidth;
+  final double tileHeight;
   final Offset offset;
 
-  bool contains(Point<int> point) {
-    return point.x >= startX && point.x < endX && point.y >= startY && point.y < endY;
+  Offset tileToScreen(Point<int> position) {
+    final screenX = (position.x - position.y) * tileWidth / 2;
+    final screenY = (position.x + position.y) * tileHeight / 2;
+    return Offset(screenX, screenY) + offset;
   }
 
-  static _Viewport fromPlayer({
-    required Point<int> player,
-    required int mapWidth,
-    required int mapHeight,
-    required double tileSize,
-    required Size screenSize,
-  }) {
-    final tilesWide = (screenSize.width / tileSize).ceil() + 2;
-    final tilesHigh = (screenSize.height / tileSize).ceil() + 2;
-    final halfWide = (tilesWide / 2).floor();
-    final halfHigh = (tilesHigh / 2).floor();
-    final startX = (player.x - halfWide).clamp(0, max(0, mapWidth - tilesWide));
-    final startY = (player.y - halfHigh).clamp(0, max(0, mapHeight - tilesHigh));
-    final endX = min(mapWidth, startX + tilesWide);
-    final endY = min(mapHeight, startY + tilesHigh);
-    final offset = Offset(-startX * tileSize, -startY * tileSize);
-    return _Viewport(
-      startX: startX,
-      startY: startY,
-      endX: endX,
-      endY: endY,
-      offset: offset,
-    );
+  static Offset _calculateOffset(
+    double tileWidth,
+    double tileHeight,
+    Size screenSize,
+    Point<int> focus,
+  ) {
+    final focusX = (focus.x - focus.y) * tileWidth / 2;
+    final focusY = (focus.x + focus.y) * tileHeight / 2;
+    return Offset(screenSize.width / 2 - focusX, screenSize.height / 2 - focusY);
+  }
+}
+
+enum _RenderableType { decoration, crate, enemy, player }
+
+class _Renderable {
+  _Renderable.decoration(this.decoration)
+      : type = _RenderableType.decoration,
+        crate = null,
+        enemy = null,
+        player = null;
+
+  _Renderable.crate(this.crate)
+      : type = _RenderableType.crate,
+        decoration = null,
+        enemy = null,
+        player = null;
+
+  _Renderable.enemy(this.enemy)
+      : type = _RenderableType.enemy,
+        decoration = null,
+        crate = null,
+        player = null;
+
+  _Renderable.player(this.player)
+      : type = _RenderableType.player,
+        decoration = null,
+        crate = null,
+        enemy = null;
+
+  final _RenderableType type;
+  final Decoration? decoration;
+  final Crate? crate;
+  final Enemy? enemy;
+  final Player? player;
+
+  Point<int> get position {
+    switch (type) {
+      case _RenderableType.decoration:
+        return decoration!.position;
+      case _RenderableType.crate:
+        return crate!.position;
+      case _RenderableType.enemy:
+        return enemy!.position;
+      case _RenderableType.player:
+        return player!.position;
+    }
+  }
+
+  int get depth => position.x + position.y;
+}
+
+class _TerrainPalette {
+  _TerrainPalette({required this.top, required this.left, required this.right, required this.elevation});
+
+  final Color top;
+  final Color left;
+  final Color right;
+  final double elevation;
+
+  static _TerrainPalette forType(TerrainType type) {
+    switch (type) {
+      case TerrainType.grass:
+        return _TerrainPalette(
+          top: const Color(0xFF4D6B3B),
+          left: const Color(0xFF3E5630),
+          right: const Color(0xFF36502C),
+          elevation: 6,
+        );
+      case TerrainType.road:
+        return _TerrainPalette(
+          top: const Color(0xFF5A4734),
+          left: const Color(0xFF4A3A2A),
+          right: const Color(0xFF3E2F22),
+          elevation: 4,
+        );
+      case TerrainType.water:
+        return _TerrainPalette(
+          top: const Color(0xFF2C5B7C),
+          left: const Color(0xFF1E3D54),
+          right: const Color(0xFF173444),
+          elevation: 0,
+        );
+      case TerrainType.forest:
+        return _TerrainPalette(
+          top: const Color(0xFF2E5C44),
+          left: const Color(0xFF244938),
+          right: const Color(0xFF1E3A2C),
+          elevation: 7,
+        );
+      case TerrainType.sand:
+        return _TerrainPalette(
+          top: const Color(0xFFB0955E),
+          left: const Color(0xFF8B7349),
+          right: const Color(0xFF7C643D),
+          elevation: 3,
+        );
+    }
   }
 }
 
@@ -584,9 +801,11 @@ class GameState {
   final List<Enemy> enemies = [];
   final List<Decoration> decorations = [];
   final List<String> inventory = [];
+  final Set<String> equippedItems = {};
   final List<List<TerrainType>> terrain = [];
   final Set<Point<int>> roadTiles = {};
   String logMessage = 'Explore the medieval frontier and survive.';
+  int supplies = 0;
 
   void _generateWorld() {
     _generateTerrain();
@@ -777,8 +996,9 @@ class GameState {
     crate.isOpened = true;
     final item = _rollLoot();
     inventory.add(item);
-    _applyLoot(item);
-    logMessage = 'Looted $item. Inventory size ${inventory.length}.';
+    final gainedSupplies = 1 + random.nextInt(2);
+    supplies += gainedSupplies;
+    logMessage = 'Looted $item (+$gainedSupplies supplies). Inventory size ${inventory.length}.';
   }
 
   String _rollLoot() {
@@ -794,19 +1014,9 @@ class GameState {
     return lootTable[random.nextInt(lootTable.length)];
   }
 
-  void _applyLoot(String item) {
-    if (item.contains('Armor')) {
-      player.armor += 1;
-    } else if (item.contains('Sword') || item.contains('Axe') || item.contains('Crossbow')) {
-      player.damage += 1;
-    } else if (item.contains('Healing')) {
-      player.health += 3;
-    }
-  }
-
   void upgrade(String stat) {
-    if (player.level <= 0) {
-      logMessage = 'Earn levels by defeating enemies.';
+    if (!canUpgrade(stat)) {
+      logMessage = 'Need 1 level and enough supplies to upgrade.';
       return;
     }
     switch (stat) {
@@ -821,7 +1031,81 @@ class GameState {
         break;
     }
     player.level -= 1;
+    supplies -= upgradeCost(stat);
     logMessage = 'Upgraded $stat. Remaining level ${player.level}.';
+  }
+
+  int upgradeCost(String stat) {
+    switch (stat) {
+      case 'hp':
+        return 3;
+      case 'armor':
+      case 'damage':
+        return 2;
+    }
+    return 2;
+  }
+
+  bool canUpgrade(String stat) {
+    return player.level > 0 && supplies >= upgradeCost(stat);
+  }
+
+  String? actionLabelForItem(String item) {
+    if (item.contains('Healing')) {
+      return 'Use';
+    }
+    if (equippedItems.contains(item)) {
+      return null;
+    }
+    if (item.contains('Armor') || item.contains('Sword') || item.contains('Axe') || item.contains('Crossbow')) {
+      return 'Equip';
+    }
+    return 'Use';
+  }
+
+  String itemDescription(String item) {
+    if (item.contains('Healing')) {
+      return 'Consume to restore 6 HP.';
+    }
+    if (item.contains('Armor')) {
+      return 'Equip to gain +1 armor.';
+    }
+    if (item.contains('Sword') || item.contains('Axe') || item.contains('Crossbow')) {
+      return 'Equip to gain +1 damage.';
+    }
+    return 'Use this item.';
+  }
+
+  void useItem(String item) {
+    if (!inventory.contains(item)) {
+      return;
+    }
+    if (item.contains('Healing')) {
+      player.health += 6;
+      inventory.remove(item);
+      logMessage = 'Used $item. HP now ${player.health}.';
+      return;
+    }
+    if (equippedItems.contains(item)) {
+      logMessage = '$item already equipped.';
+      return;
+    }
+    if (item.contains('Armor')) {
+      player.armor += 1;
+      equippedItems.add(item);
+      inventory.remove(item);
+      logMessage = 'Equipped $item. Armor now ${player.armor}.';
+      return;
+    }
+    if (item.contains('Sword') || item.contains('Axe') || item.contains('Crossbow')) {
+      player.damage += 1;
+      equippedItems.add(item);
+      inventory.remove(item);
+      logMessage = 'Equipped $item. Damage now ${player.damage}.';
+      return;
+    }
+    inventory.remove(item);
+    logMessage = 'Used $item.';
   }
 
   double _distance(Point<int> a, Point<int> b) {
