@@ -246,179 +246,323 @@ class GamePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final tileSize = min(size.width / state.mapWidth, size.height / state.mapHeight);
+    const tileSize = 24.0;
+    final viewport = _Viewport.fromPlayer(
+      player: state.player.position,
+      mapWidth: state.mapWidth,
+      mapHeight: state.mapHeight,
+      tileSize: tileSize,
+      screenSize: size,
+    );
     final paint = Paint()..style = PaintingStyle.fill;
 
-    paint.color = const Color(0xFF3E3A2D);
+    paint.color = const Color(0xFF2E241C);
     canvas.drawRect(Offset.zero & size, paint);
 
-    for (var y = 0; y < state.mapHeight; y++) {
-      for (var x = 0; x < state.mapWidth; x++) {
-        final tileOffset = Offset(x * tileSize, y * tileSize);
-        final rect = tileOffset & Size(tileSize, tileSize);
+    for (var y = viewport.startY; y < viewport.endY; y++) {
+      for (var x = viewport.startX; x < viewport.endX; x++) {
+        final rect = Rect.fromLTWH(
+          (x * tileSize) + viewport.offset.dx,
+          (y * tileSize) + viewport.offset.dy,
+          tileSize,
+          tileSize,
+        );
         _paintTerrain(canvas, rect, state.terrain[y][x]);
       }
     }
 
-    for (final tree in state.decorations.where((decor) => decor.type == DecorationType.tree)) {
-      _paintTree(canvas, _tileRect(tree.position, tileSize), tileSize);
-    }
-
-    for (final rock in state.decorations.where((decor) => decor.type == DecorationType.rock)) {
-      _paintRock(canvas, _tileRect(rock.position, tileSize));
-    }
-
-    for (final camp in state.decorations.where((decor) => decor.type == DecorationType.camp)) {
-      _paintCamp(canvas, _tileRect(camp.position, tileSize));
+    for (final decoration in state.decorations) {
+      if (!viewport.contains(decoration.position)) {
+        continue;
+      }
+      final rect = _tileRect(decoration.position, tileSize, viewport.offset);
+      switch (decoration.type) {
+        case DecorationType.tree:
+          _paintTree(canvas, rect, tileSize);
+          break;
+        case DecorationType.rock:
+          _paintRock(canvas, rect, tileSize);
+          break;
+        case DecorationType.camp:
+          _paintCamp(canvas, rect, tileSize);
+          break;
+      }
     }
 
     for (final crate in state.crates) {
-      _paintCrate(canvas, _tileRect(crate.position, tileSize), crate.isOpened);
+      if (!viewport.contains(crate.position)) {
+        continue;
+      }
+      _paintCrate(canvas, _tileRect(crate.position, tileSize, viewport.offset), crate.isOpened);
     }
 
     for (final enemy in state.enemies) {
-      _paintEnemy(canvas, _tileCenter(enemy.position, tileSize), tileSize, enemy);
+      if (!viewport.contains(enemy.position)) {
+        continue;
+      }
+      _paintEnemy(canvas, _tileCenter(enemy.position, tileSize, viewport.offset), tileSize, enemy);
     }
 
-    _paintPlayer(canvas, _tileCenter(state.player.position, tileSize), tileSize);
+    _paintPlayer(
+      canvas,
+      _tileCenter(state.player.position, tileSize, viewport.offset),
+      tileSize,
+    );
   }
 
   void _paintTerrain(Canvas canvas, Rect rect, TerrainType type) {
     final paint = Paint()..style = PaintingStyle.fill;
     switch (type) {
       case TerrainType.grass:
-        paint.color = const Color(0xFF4C5A3E);
+        paint.shader = const LinearGradient(
+          colors: [Color(0xFF3E5630), Color(0xFF566B45)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ).createShader(rect);
         canvas.drawRect(rect, paint);
-        paint.color = const Color(0xFF556A47);
-        canvas.drawCircle(rect.center + const Offset(4, -6), rect.width * 0.12, paint);
-        canvas.drawCircle(rect.center + const Offset(-6, 8), rect.width * 0.08, paint);
+        paint.shader = null;
+        paint.color = const Color(0xFF4A6B3D);
+        canvas.drawCircle(rect.center + const Offset(4, -6), rect.width * 0.15, paint);
         break;
       case TerrainType.road:
-        paint.color = const Color(0xFF5E4A35);
+        paint.shader = const LinearGradient(
+          colors: [Color(0xFF4F3C2B), Color(0xFF6B523B)],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+        ).createShader(rect);
         canvas.drawRect(rect, paint);
-        paint.color = const Color(0xFF6B563F);
+        paint.shader = null;
+        paint.color = const Color(0xFF3B2C1F);
         canvas.drawRect(rect.deflate(rect.width * 0.2), paint);
         break;
       case TerrainType.water:
-        paint.color = const Color(0xFF284C70);
+        paint.shader = const LinearGradient(
+          colors: [Color(0xFF1A3C5C), Color(0xFF356FA5)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ).createShader(rect);
         canvas.drawRect(rect, paint);
-        paint.color = const Color(0xFF3B6E9E);
-        canvas.drawArc(rect.deflate(rect.width * 0.15), 0, 2.4, false, paint);
+        paint.shader = null;
+        paint.color = const Color(0xFF5EA4D8);
+        canvas.drawArc(rect.deflate(rect.width * 0.1), 0.2, 2.1, false, paint);
         break;
       case TerrainType.forest:
-        paint.color = const Color(0xFF2E4C36);
+        paint.shader = const LinearGradient(
+          colors: [Color(0xFF1F3D2D), Color(0xFF325C44)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ).createShader(rect);
         canvas.drawRect(rect, paint);
-        paint.color = const Color(0xFF375A3F);
-        canvas.drawCircle(rect.center, rect.width * 0.15, paint);
+        paint.shader = null;
+        paint.color = const Color(0xFF2E6A44);
+        canvas.drawCircle(rect.center, rect.width * 0.18, paint);
         break;
       case TerrainType.sand:
-        paint.color = const Color(0xFF7B6A45);
+        paint.shader = const LinearGradient(
+          colors: [Color(0xFF8B7349), Color(0xFFB0955E)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ).createShader(rect);
         canvas.drawRect(rect, paint);
-        paint.color = const Color(0xFF8C7A52);
-        canvas.drawCircle(rect.center + const Offset(6, 6), rect.width * 0.1, paint);
+        paint.shader = null;
+        paint.color = const Color(0xFFC4A76A);
+        canvas.drawCircle(rect.center + const Offset(6, 6), rect.width * 0.12, paint);
         break;
     }
   }
 
   void _paintTree(Canvas canvas, Rect rect, double tileSize) {
     final trunkPaint = Paint()..color = const Color(0xFF5A3C2A);
-    final leavesPaint = Paint()..color = const Color(0xFF2F6B3F);
+    final leavesPaint = Paint()
+      ..shader = const LinearGradient(
+        colors: [Color(0xFF1F6B3A), Color(0xFF3FA35C)],
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+      ).createShader(rect);
+    final shadowPaint = Paint()..color = Colors.black.withOpacity(0.25);
+    canvas.drawOval(rect.shift(Offset(3, tileSize * 0.2)).deflate(tileSize * 0.2), shadowPaint);
     final trunk = Rect.fromCenter(
-      center: rect.center + Offset(0, tileSize * 0.15),
+      center: rect.center + Offset(0, tileSize * 0.2),
       width: rect.width * 0.2,
       height: rect.height * 0.35,
     );
     canvas.drawRect(trunk, trunkPaint);
-    canvas.drawCircle(rect.center + Offset(0, -tileSize * 0.1), rect.width * 0.35, leavesPaint);
-    canvas.drawCircle(rect.center + Offset(-tileSize * 0.15, 0), rect.width * 0.25, leavesPaint);
+    canvas.drawCircle(rect.center + Offset(0, -tileSize * 0.12), rect.width * 0.4, leavesPaint);
   }
 
-  void _paintRock(Canvas canvas, Rect rect) {
-    final paint = Paint()..color = const Color(0xFF7D7E80);
-    final rockRect = Rect.fromCenter(center: rect.center, width: rect.width * 0.55, height: rect.height * 0.4);
-    canvas.drawRRect(RRect.fromRectAndRadius(rockRect, const Radius.circular(6)), paint);
+  void _paintRock(Canvas canvas, Rect rect, double tileSize) {
+    final paint = Paint()
+      ..shader = const LinearGradient(
+        colors: [Color(0xFF596066), Color(0xFF9AA1A8)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ).createShader(rect);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(rect.deflate(tileSize * 0.2), const Radius.circular(8)),
+      paint,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(rect.deflate(tileSize * 0.2), const Radius.circular(8)),
+      Paint()
+        ..color = Colors.black.withOpacity(0.25)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2,
+    );
   }
 
-  void _paintCamp(Canvas canvas, Rect rect) {
-    final firePaint = Paint()..color = const Color(0xFFE58A2E);
+  void _paintCamp(Canvas canvas, Rect rect, double tileSize) {
+    final firePaint = Paint()
+      ..shader = const RadialGradient(
+        colors: [Color(0xFFFFF2B0), Color(0xFFE58A2E), Color(0xFFB3471D)],
+      ).createShader(rect);
     final logPaint = Paint()..color = const Color(0xFF6A4630);
-    canvas.drawOval(rect.deflate(rect.width * 0.25), firePaint);
+    canvas.drawOval(rect.deflate(tileSize * 0.25), firePaint);
     canvas.drawRect(
-      Rect.fromCenter(center: rect.center, width: rect.width * 0.6, height: rect.height * 0.1),
+      Rect.fromCenter(center: rect.center, width: rect.width * 0.7, height: rect.height * 0.12),
       logPaint,
     );
   }
 
   void _paintCrate(Canvas canvas, Rect rect, bool opened) {
-    final cratePaint = Paint()..color = opened ? const Color(0xFF6B5B4D) : const Color(0xFF9B6A3C);
+    final cratePaint = Paint()
+      ..shader = LinearGradient(
+        colors: opened
+            ? [const Color(0xFF5C4B3E), const Color(0xFF6B5B4D)]
+            : [const Color(0xFF8C5C2D), const Color(0xFFB1783E)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ).createShader(rect);
     final outlinePaint = Paint()
       ..color = const Color(0xFF2E2015)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
-    canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(4)), cratePaint);
-    canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(4)), outlinePaint);
+    canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(6)), cratePaint);
+    canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(6)), outlinePaint);
     if (!opened) {
       final latch = Rect.fromCenter(center: rect.center, width: rect.width * 0.2, height: rect.height * 0.1);
-      canvas.drawRect(latch, Paint()..color = const Color(0xFFD1B06A));
+      canvas.drawRect(latch, Paint()..color = const Color(0xFFE3C177));
     }
   }
 
   void _paintEnemy(Canvas canvas, Offset center, double tileSize, Enemy enemy) {
+    final bodyRect = Rect.fromCenter(center: center, width: tileSize * 0.6, height: tileSize * 0.65);
     final basePaint = Paint()
-      ..color = enemy.type == EnemyType.zombie ? const Color(0xFF5FD37C) : const Color(0xFFD7685A);
+      ..shader = LinearGradient(
+        colors: enemy.type == EnemyType.zombie
+            ? [const Color(0xFF3E8A54), const Color(0xFF6ED98C)]
+            : [const Color(0xFFB1453F), const Color(0xFFE98A6F)],
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+      ).createShader(bodyRect);
     final outlinePaint = Paint()
       ..color = const Color(0xFF1B1B1B)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
-    final body = Rect.fromCenter(center: center, width: tileSize * 0.55, height: tileSize * 0.6);
-    canvas.drawRRect(RRect.fromRectAndRadius(body, const Radius.circular(6)), basePaint);
-    canvas.drawRRect(RRect.fromRectAndRadius(body, const Radius.circular(6)), outlinePaint);
-    canvas.drawCircle(center + Offset(0, -tileSize * 0.25), tileSize * 0.15, basePaint);
+    canvas.drawShadow(Path()..addOval(bodyRect), Colors.black, 4, true);
+    canvas.drawRRect(RRect.fromRectAndRadius(bodyRect, const Radius.circular(8)), basePaint);
+    canvas.drawRRect(RRect.fromRectAndRadius(bodyRect, const Radius.circular(8)), outlinePaint);
+    canvas.drawCircle(center + Offset(0, -tileSize * 0.28), tileSize * 0.16, basePaint);
     if (enemy.isBoss) {
-      canvas.drawCircle(center + Offset(0, -tileSize * 0.42), tileSize * 0.08, Paint()..color = Colors.amber);
+      canvas.drawCircle(center + Offset(0, -tileSize * 0.45), tileSize * 0.09, Paint()..color = Colors.amber);
     }
   }
 
   void _paintPlayer(Canvas canvas, Offset center, double tileSize) {
-    final armorPaint = Paint()..color = const Color(0xFF3A6EA5);
-    final shieldPaint = Paint()..color = const Color(0xFFB08B4C);
+    final bodyRect = Rect.fromCenter(center: center, width: tileSize * 0.62, height: tileSize * 0.7);
+    final armorPaint = Paint()
+      ..shader = const LinearGradient(
+        colors: [Color(0xFF2C6CA3), Color(0xFF5CB0E6)],
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+      ).createShader(bodyRect);
+    final shieldPaint = Paint()
+      ..shader = const LinearGradient(
+        colors: [Color(0xFF9B7B3E), Color(0xFFD8B56E)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ).createShader(bodyRect);
     final outlinePaint = Paint()
       ..color = Colors.black
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
 
-    final body = Rect.fromCenter(center: center, width: tileSize * 0.6, height: tileSize * 0.65);
-    canvas.drawRRect(RRect.fromRectAndRadius(body, const Radius.circular(6)), armorPaint);
-    canvas.drawRRect(RRect.fromRectAndRadius(body, const Radius.circular(6)), outlinePaint);
-    canvas.drawCircle(center + Offset(0, -tileSize * 0.3), tileSize * 0.18, armorPaint);
+    canvas.drawShadow(Path()..addOval(bodyRect), Colors.black, 6, true);
+    canvas.drawRRect(RRect.fromRectAndRadius(bodyRect, const Radius.circular(8)), armorPaint);
+    canvas.drawRRect(RRect.fromRectAndRadius(bodyRect, const Radius.circular(8)), outlinePaint);
+    canvas.drawCircle(center + Offset(0, -tileSize * 0.32), tileSize * 0.18, armorPaint);
     final shield = Path()
-      ..moveTo(center.dx + tileSize * 0.25, center.dy - tileSize * 0.1)
-      ..lineTo(center.dx + tileSize * 0.4, center.dy + tileSize * 0.05)
-      ..lineTo(center.dx + tileSize * 0.3, center.dy + tileSize * 0.28)
+      ..moveTo(center.dx + tileSize * 0.26, center.dy - tileSize * 0.1)
+      ..lineTo(center.dx + tileSize * 0.42, center.dy + tileSize * 0.05)
+      ..lineTo(center.dx + tileSize * 0.32, center.dy + tileSize * 0.3)
       ..lineTo(center.dx + tileSize * 0.18, center.dy + tileSize * 0.05)
       ..close();
     canvas.drawPath(shield, shieldPaint);
     canvas.drawPath(shield, outlinePaint);
   }
 
-  Rect _tileRect(Point<int> position, double tileSize) {
+  Rect _tileRect(Point<int> position, double tileSize, Offset cameraOffset) {
     return Rect.fromLTWH(
-      position.x * tileSize + tileSize * 0.1,
-      position.y * tileSize + tileSize * 0.1,
+      position.x * tileSize + tileSize * 0.1 + cameraOffset.dx,
+      position.y * tileSize + tileSize * 0.1 + cameraOffset.dy,
       tileSize * 0.8,
       tileSize * 0.8,
     );
   }
 
-  Offset _tileCenter(Point<int> position, double tileSize) {
+  Offset _tileCenter(Point<int> position, double tileSize, Offset cameraOffset) {
     return Offset(
-      position.x * tileSize + tileSize * 0.5,
-      position.y * tileSize + tileSize * 0.5,
+      position.x * tileSize + tileSize * 0.5 + cameraOffset.dx,
+      position.y * tileSize + tileSize * 0.5 + cameraOffset.dy,
     );
   }
 
   @override
   bool shouldRepaint(covariant GamePainter oldDelegate) => true;
+}
+
+class _Viewport {
+  _Viewport({
+    required this.startX,
+    required this.startY,
+    required this.endX,
+    required this.endY,
+    required this.offset,
+  });
+
+  final int startX;
+  final int startY;
+  final int endX;
+  final int endY;
+  final Offset offset;
+
+  bool contains(Point<int> point) {
+    return point.x >= startX && point.x < endX && point.y >= startY && point.y < endY;
+  }
+
+  static _Viewport fromPlayer({
+    required Point<int> player,
+    required int mapWidth,
+    required int mapHeight,
+    required double tileSize,
+    required Size screenSize,
+  }) {
+    final tilesWide = (screenSize.width / tileSize).ceil() + 2;
+    final tilesHigh = (screenSize.height / tileSize).ceil() + 2;
+    final halfWide = (tilesWide / 2).floor();
+    final halfHigh = (tilesHigh / 2).floor();
+    final startX = (player.x - halfWide).clamp(0, max(0, mapWidth - tilesWide));
+    final startY = (player.y - halfHigh).clamp(0, max(0, mapHeight - tilesHigh));
+    final endX = min(mapWidth, startX + tilesWide);
+    final endY = min(mapHeight, startY + tilesHigh);
+    final offset = Offset(-startX * tileSize, -startY * tileSize);
+    return _Viewport(
+      startX: startX,
+      startY: startY,
+      endX: endX,
+      endY: endY,
+      offset: offset,
+    );
+  }
 }
 
 enum TerrainType { grass, road, water, forest, sand }
@@ -428,14 +572,14 @@ enum DecorationType { tree, rock, camp }
 class GameState {
   GameState({required int seed})
       : random = Random(seed),
-        player = Player(position: const Point(20, 12)) {
+        player = Player(position: const Point(60, 40)) {
     _generateWorld();
   }
 
   final Random random;
   final Player player;
-  final int mapWidth = 40;
-  final int mapHeight = 24;
+  final int mapWidth = 120;
+  final int mapHeight = 80;
   final List<Crate> crates = [];
   final List<Enemy> enemies = [];
   final List<Decoration> decorations = [];
@@ -446,46 +590,37 @@ class GameState {
 
   void _generateWorld() {
     _generateTerrain();
+    _carveRoads();
 
-    for (var x = 4; x < mapWidth - 4; x++) {
-      roadTiles.add(Point(x, mapHeight ~/ 2));
-    }
-    for (var y = 2; y < mapHeight - 2; y++) {
-      roadTiles.add(Point(mapWidth ~/ 2, y));
-    }
-    for (final road in roadTiles) {
-      terrain[road.y][road.x] = TerrainType.road;
-    }
-
-    for (var i = 0; i < 30; i++) {
+    for (var i = 0; i < 80; i++) {
       crates.add(Crate(position: _randomOpenTile()));
     }
 
-    for (var i = 0; i < 18; i++) {
+    for (var i = 0; i < 70; i++) {
       decorations.add(Decoration(position: _randomOpenTile(), type: DecorationType.tree));
     }
 
-    for (var i = 0; i < 10; i++) {
+    for (var i = 0; i < 40; i++) {
       decorations.add(Decoration(position: _randomOpenTile(), type: DecorationType.rock));
     }
 
-    for (var i = 0; i < 4; i++) {
+    for (var i = 0; i < 12; i++) {
       decorations.add(Decoration(position: _randomOpenTile(), type: DecorationType.camp));
     }
 
-    for (var i = 0; i < 8; i++) {
+    for (var i = 0; i < 18; i++) {
       enemies.add(Enemy(
         type: EnemyType.human,
         position: _randomOpenTile(),
-        isBoss: i == 0,
+        isBoss: i == 0 || i == 9,
       ));
     }
 
-    for (var i = 0; i < 10; i++) {
+    for (var i = 0; i < 22; i++) {
       enemies.add(Enemy(
         type: EnemyType.zombie,
         position: _randomOpenTile(),
-        isBoss: i == 9,
+        isBoss: i == 0 || i == 21,
       ));
     }
   }
@@ -495,13 +630,14 @@ class GameState {
     for (var y = 0; y < mapHeight; y++) {
       final row = <TerrainType>[];
       for (var x = 0; x < mapWidth; x++) {
-        final roll = random.nextDouble();
-        if (roll < 0.08) {
+        final height = _fractalNoise(x, y, scale: 0.08, octaves: 4);
+        final moisture = _fractalNoise(x + 200, y + 200, scale: 0.1, octaves: 3);
+        if (height < 0.32) {
           row.add(TerrainType.water);
-        } else if (roll < 0.16) {
-          row.add(TerrainType.forest);
-        } else if (roll < 0.22) {
+        } else if (height < 0.38) {
           row.add(TerrainType.sand);
+        } else if (height < 0.75 && moisture > 0.62) {
+          row.add(TerrainType.forest);
         } else {
           row.add(TerrainType.grass);
         }
@@ -509,6 +645,71 @@ class GameState {
       terrain.add(row);
     }
   }
+
+  void _carveRoads() {
+    final pathStarts = [
+      Point(10, mapHeight ~/ 2),
+      Point(mapWidth ~/ 2, 10),
+      Point(mapWidth - 12, mapHeight - 12),
+    ];
+    for (final start in pathStarts) {
+      var current = start;
+      for (var step = 0; step < 120; step++) {
+        roadTiles.add(current);
+        terrain[current.y][current.x] = TerrainType.road;
+        final dx = random.nextInt(3) - 1;
+        final dy = random.nextInt(3) - 1;
+        final next = Point(
+          (current.x + dx).clamp(1, mapWidth - 2),
+          (current.y + dy).clamp(1, mapHeight - 2),
+        );
+        current = next;
+      }
+    }
+  }
+
+  double _fractalNoise(int x, int y, {required double scale, required int octaves}) {
+    var value = 0.0;
+    var amplitude = 1.0;
+    var frequency = 1.0;
+    var maxValue = 0.0;
+    for (var i = 0; i < octaves; i++) {
+      value += _valueNoise(x * scale * frequency, y * scale * frequency) * amplitude;
+      maxValue += amplitude;
+      amplitude *= 0.5;
+      frequency *= 2.0;
+    }
+    return value / maxValue;
+  }
+
+  double _valueNoise(double x, double y) {
+    final xi = x.floor();
+    final yi = y.floor();
+    final xf = x - xi;
+    final yf = y - yi;
+
+    final topLeft = _hash(xi, yi);
+    final topRight = _hash(xi + 1, yi);
+    final bottomLeft = _hash(xi, yi + 1);
+    final bottomRight = _hash(xi + 1, yi + 1);
+
+    final u = _fade(xf);
+    final v = _fade(yf);
+
+    final top = _lerp(topLeft, topRight, u);
+    final bottom = _lerp(bottomLeft, bottomRight, u);
+    return _lerp(top, bottom, v);
+  }
+
+  double _hash(int x, int y) {
+    var n = x * 374761393 + y * 668265263;
+    n = (n ^ (n >> 13)) * 1274126177;
+    return ((n ^ (n >> 16)) & 0x7fffffff) / 0x7fffffff;
+  }
+
+  double _fade(double t) => t * t * (3 - 2 * t);
+
+  double _lerp(double a, double b, double t) => a + (b - a) * t;
 
   Point<int> _randomOpenTile() {
     Point<int> position;
@@ -668,8 +869,8 @@ class Enemy {
   final EnemyType type;
   final Point<int> position;
   final bool isBoss;
-  int health = 8;
-  int damage = 2;
+  int health = 10;
+  int damage = 3;
 
   String get name => isBoss
       ? (type == EnemyType.zombie ? 'Zombie Warlord' : 'Bandit Captain')
